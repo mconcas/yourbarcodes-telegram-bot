@@ -56,10 +56,10 @@
           variant="flat"
           rounded="pill"
           size="large"
-          prepend-icon="mdi-send"
+          prepend-icon="mdi-check-circle"
           @click="$emit('send', result)"
         >
-          Send to Bot
+          Confirm code
         </v-btn>
       </v-card-actions>
     </v-card>

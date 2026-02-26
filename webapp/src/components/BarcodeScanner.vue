@@ -110,10 +110,10 @@
           variant="flat"
           size="large"
           rounded="pill"
-          prepend-icon="mdi-send"
-          @click="$emit('scanned', scannedResult)"
+          prepend-icon="mdi-check-circle"
+          @click="$emit('send', scannedResult)"
         >
-          Send to Bot
+          Confirm code
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -134,7 +134,7 @@ const FORMAT_MAP = {
 export default {
   name: 'BarcodeScanner',
 
-  emits: ['scanned', 'close'],
+  emits: ['detected', 'send', 'close'],
 
   data() {
     return {
@@ -276,6 +276,8 @@ export default {
         format: formatName,
         timestamp: Date.now(),
       }
+
+      this.$emit('detected', this.scannedResult)
 
       // Haptic feedback
       try {

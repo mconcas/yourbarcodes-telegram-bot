@@ -20,7 +20,7 @@ from app.handlers.cards import (
     mycards,
     show_card,
 )
-from app.handlers.scan import handle_photo, handle_webapp_data
+from app.handlers.scan import handle_photo
 from app.handlers.start import menu_callback, start_command
 from app.services.opensearch_client import OpenSearchClient
 
@@ -58,10 +58,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(delete_card_cb, pattern=r"^card:del:"))
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^menu:"))
 
-    # 4. WebApp data (from the in-chat barcode scanner)
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
-
-    # 5. Standalone photo handler (scan outside the add-card flow)
+    # 4. Standalone photo handler (scan outside the add-card flow)
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     logger.info("Starting polling …")

@@ -47,8 +47,7 @@
             <ScanView
               :theme-colors="themeColors"
               :is-telegram-client="isTelegramClient"
-              :supports-native-scanner="supportsNativeScanner"
-              @scanned="onScanned"
+              @detected="onDetected"
               @send="sendToBot"
             />
           </v-window-item>
@@ -111,7 +110,6 @@ export default {
       currentResult: null,
       recentScans: [],
       isTelegramClient: false,
-      supportsNativeScanner: false,
     }
   },
 
@@ -142,7 +140,6 @@ export default {
     if (tg?.platform && tg.platform !== 'unknown') {
       this.isTelegramClient = true
     }
-    this.supportsNativeScanner = tg?.isVersionAtLeast?.('6.9') || false
 
     if (!this.isTelegramClient) {
       this.showWarning = true
@@ -150,14 +147,6 @@ export default {
 
     // Load recent scans from session
     this.loadRecentScans()
-
-    // Set up main button
-    if (this.isTelegramClient && this.supportsNativeScanner) {
-      tg.MainButton.setText('📸 Scan Barcode')
-      tg.MainButton.show()
-      tg.onEvent('mainButtonClicked', this.onMainButtonClick)
-      tg.onEvent('qrTextReceived', this.onNativeScan)
-    }
   },
 
   mounted() {
@@ -166,29 +155,8 @@ export default {
   },
 
   methods: {
-    onMainButtonClick() {
-      this.TMA.showScanQrPopup({ text: 'Point at a barcode or QR code' })
-    },
-
-    onNativeScan(data) {
-      if (!data?.data) return
-
-      this.TMA.closeScanQrPopup()
-      this.haptic('success')
-
-      const result = {
-        code: data.data,
-        format: this.detectFormat(data.data),
-        timestamp: Date.now(),
-      }
-      this.onScanned(result)
-    },
-
-    onScanned(result) {
-      this.currentResult = result
-      this.showResult = true
+    onDetected(result) {
       this.addToRecent(result)
-      this.haptic('success')
     },
 
     sendToBot(result) {
@@ -204,9 +172,6 @@ export default {
     scanAgain() {
       this.showResult = false
       this.currentResult = null
-      if (this.supportsNativeScanner) {
-        this.TMA.showScanQrPopup({ text: 'Point at a barcode or QR code' })
-      }
     },
 
     onSelectRecent(scan) {
