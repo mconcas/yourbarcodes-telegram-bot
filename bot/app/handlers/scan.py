@@ -67,7 +67,14 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
     code = payload.get("code", "")
     fmt_raw = payload.get("format", "")
     # Normalise the JS format name
-    fmt_map = {"QR_CODE": "qrcode", "EAN_13": "ean13", "CODE_128": "code128"}
+    fmt_map = {
+        "QR_CODE": "qrcode",
+        "QRCODE": "qrcode",
+        "EAN_13": "ean13",
+        "EAN_8": "ean13",
+        "CODE_128": "code128",
+        "CODE_39": "code128",
+    }
     barcode_format = fmt_map.get(fmt_raw, "code128")
     fmt_label = SUPPORTED_FORMATS.get(barcode_format, barcode_format)
 
