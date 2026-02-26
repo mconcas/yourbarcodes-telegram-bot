@@ -15,13 +15,24 @@ from telegram.ext import ContextTypes
 from app.config import WEBAPP_URL
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Build the main-menu inline keyboard."""
+def main_menu_keyboard(*, is_private: bool = True, bot_username: str = "") -> InlineKeyboardMarkup:
+    """Build the main-menu inline keyboard.
+
+    In groups, swaps the scanner row for a deep-link to the private chat
+    because Telegram only supports webapp buttons in private chats.
+    """
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton("\U0001f4cb My Cards", callback_data="menu:mycards")],
         [InlineKeyboardButton("\u2795 Add Card", callback_data="menu:addcard")],
     ]
-    if not WEBAPP_URL:
+    if WEBAPP_URL and not is_private and bot_username:
+        rows.append([
+            InlineKeyboardButton(
+                "\U0001f4f7 Scan Barcode",
+                url=f"https://t.me/{bot_username}?start=scan",
+            )
+        ])
+    elif not WEBAPP_URL:
         rows.append([
             InlineKeyboardButton(
                 "\U0001f4f7 Scan Barcode (send photo)",
@@ -50,6 +61,20 @@ def scanner_reply_keyboard() -> ReplyKeyboardMarkup | None:
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle ``/start`` and ``/help``."""
+    is_private = update.effective_chat.type == "private"  # type: ignore[union-attr]
+    bot_username = context.bot.username or ""
+
+    # Deep-link: /start scan  (from group "Scan Barcode" button)
+    if is_private and context.args and context.args[0] == "scan":
+        reply_kb = scanner_reply_keyboard()
+        if reply_kb:
+            await update.message.reply_text(  # type: ignore[union-attr]
+                "\U0001f4f7 Tap the *Scan Barcode* button below to open the scanner:",
+                reply_markup=reply_kb,
+                parse_mode="Markdown",
+            )
+            return
+
     text = (
         "\U0001f44b Welcome to *Barcode Bot*!\n\n"
         "I store your loyalty-card barcodes and generate them on the fly.\n\n"
@@ -58,16 +83,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Send the inline menu
     await update.message.reply_text(  # type: ignore[union-attr]
         text,
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(is_private=is_private, bot_username=bot_username),
         parse_mode="Markdown",
     )
-    # Also set the persistent reply keyboard with the scanner button
-    reply_kb = scanner_reply_keyboard()
-    if reply_kb:
-        await update.message.reply_text(  # type: ignore[union-attr]
-            "\u2b07\ufe0f Use the button below to scan barcodes anytime:",
-            reply_markup=reply_kb,
-        )
+    # In private chats, also set the persistent reply keyboard with the scanner
+    if is_private:
+        reply_kb = scanner_reply_keyboard()
+        if reply_kb:
+            await update.message.reply_text(  # type: ignore[union-attr]
+                "\u2b07\ufe0f Use the button below to scan barcodes anytime:",
+                reply_markup=reply_kb,
+            )
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,7 +130,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             parse_mode="Markdown",
         )
     elif action == "back":
+        is_private = update.effective_chat.type == "private"  # type: ignore[union-attr]
+        bot_username = context.bot.username or ""
         await query.edit_message_text(
             "Choose an option:",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_keyboard(is_private=is_private, bot_username=bot_username),
         )
