@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
+    "html5-qrcode": "^2.3.8",
     "vue": "^3.4.21",
     "vuetify": "^3.5.8"
   },
