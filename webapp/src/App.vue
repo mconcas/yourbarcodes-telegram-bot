@@ -226,5 +226,22 @@ html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Prevent Vuetify buttons / cards from overflowing the Mini App frame */
+.v-application {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.v-card-actions {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.v-btn {
+  max-width: 100%;
 }
 </style>

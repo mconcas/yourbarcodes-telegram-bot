@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -56,72 +55,9 @@ async def addcard_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return NAME
 
 
-async def webapp_scan_entry(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Entry from the WebApp barcode scanner — code+format are known, just need a name."""
-    data = update.effective_message.web_app_data.data  # type: ignore[union-attr]
-    try:
-        payload = json.loads(data)
-    except (json.JSONDecodeError, TypeError):
-        await update.message.reply_text("\u274c Invalid data from scanner.")  # type: ignore[union-attr]
-        return ConversationHandler.END
-
-    code = payload.get("code", "")
-    fmt_raw = payload.get("format", "")
-    fmt_map = {
-        "QR_CODE": "qrcode",
-        "QRCODE": "qrcode",
-        "EAN_13": "ean13",
-        "EAN_8": "ean13",
-        "CODE_128": "code128",
-        "CODE_39": "code128",
-    }
-    barcode_format = fmt_map.get(fmt_raw, "code128")
-    fmt_label = SUPPORTED_FORMATS.get(barcode_format, barcode_format)
-
-    context.user_data["new_card_code"] = code
-    context.user_data["new_card_format"] = barcode_format
-
-    await update.message.reply_text(  # type: ignore[union-attr]
-        f"\U0001f4f7 *Scanned barcode*\n\n"
-        f"Code: `{code}`\n"
-        f"Format: {fmt_label}\n\n"
-        "What would you like to name this card?",
-        parse_mode="Markdown",
-    )
-    return NAME
-
-
 async def received_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Store the card name and ask for the code."""
     context.user_data["new_card_name"] = update.message.text.strip()  # type: ignore[union-attr]
-
-    # If code+format are already known (webapp scan flow), save immediately
-    if "new_card_code" in context.user_data and "new_card_format" in context.user_data:
-        user_id = update.effective_user.id  # type: ignore[union-attr]
-        card_name = context.user_data["new_card_name"]
-        card_code = context.user_data["new_card_code"]
-        barcode_format = context.user_data["new_card_format"]
-        fmt_label = SUPPORTED_FORMATS.get(barcode_format, barcode_format)
-
-        try:
-            _os(context).add_card(user_id, card_name, card_code, barcode_format)
-            await update.message.reply_text(  # type: ignore[union-attr]
-                f"\u2705 Card *{card_name}* saved!\n\n"
-                f"Code: `{card_code}`\n"
-                f"Format: {fmt_label}\n\n"
-                "Use /mycards to view your barcodes.",
-                parse_mode="Markdown",
-            )
-        except Exception:
-            logger.exception("Failed to save card")
-            await update.message.reply_text(  # type: ignore[union-attr]
-                "\u274c Failed to save card. Please try again."
-            )
-
-        _clear_temp(context)
-        return ConversationHandler.END
-
-    # Normal flow: ask for the barcode code
     await update.message.reply_text(  # type: ignore[union-attr]
         f"Card name: *{context.user_data['new_card_name']}*\n\n"
         "Now enter the barcode number, or send a photo of the barcode:",
@@ -401,7 +337,6 @@ def build_addcard_conversation() -> ConversationHandler:
         entry_points=[
             CommandHandler("addcard", addcard_entry),
             CallbackQueryHandler(addcard_entry, pattern=r"^menu:addcard$"),
-            MessageHandler(filters.StatusUpdate.WEB_APP_DATA, webapp_scan_entry),
         ],
         states={
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, received_name)],

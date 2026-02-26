@@ -20,7 +20,7 @@ from app.handlers.cards import (
     mycards,
     show_card,
 )
-from app.handlers.scan import handle_photo
+from app.handlers.scan import build_webapp_scan_conversation, handle_photo
 from app.handlers.start import menu_callback, start_command
 from app.services.opensearch_client import OpenSearchClient
 
@@ -42,8 +42,11 @@ def main() -> None:
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.bot_data["os_client"] = os_client
 
-    # 1. Conversation handler for /addcard  (must be first so it can
-    #    intercept menu:addcard callbacks and text messages while active)
+    # 1. WebApp scan conversation (must be first — catches WEB_APP_DATA
+    #    and then the follow-up text message for the card name)
+    app.add_handler(build_webapp_scan_conversation())
+
+    # 2. Add-card conversation handler (/addcard + menu:addcard callback)
     app.add_handler(build_addcard_conversation())
 
     # 2. Slash commands

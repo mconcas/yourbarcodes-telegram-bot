@@ -29,11 +29,10 @@
       </div>
 
       <!-- Controls bar -->
-      <v-card-actions class="pa-4 justify-center">
+      <v-card-actions class="pa-3 justify-center">
         <v-btn
           v-if="!isScanning"
           color="primary"
-          size="large"
           rounded="pill"
           prepend-icon="mdi-camera"
           :loading="isLoading"
@@ -45,7 +44,6 @@
           v-else
           color="error"
           variant="tonal"
-          size="large"
           rounded="pill"
           prepend-icon="mdi-stop"
           @click="stopScanning"
@@ -95,12 +93,13 @@
 
       <v-divider />
 
-      <v-card-actions class="pa-4">
+      <v-card-actions class="pa-3 actions-row">
         <v-btn
           variant="text"
           rounded="pill"
           prepend-icon="mdi-camera-retake"
           @click="resetAndScan"
+          class="flex-shrink-1"
         >
           Scan Again
         </v-btn>
@@ -108,10 +107,10 @@
         <v-btn
           color="primary"
           variant="flat"
-          size="large"
           rounded="pill"
           prepend-icon="mdi-check-circle"
           @click="$emit('send', scannedResult)"
+          class="flex-shrink-1"
         >
           Confirm code
         </v-btn>
@@ -422,5 +421,15 @@ export default {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.actions-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions-row .v-btn {
+  min-width: 0;
+  white-space: nowrap;
 }
 </style>

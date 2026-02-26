@@ -41,12 +41,13 @@
 
       <v-divider />
 
-      <v-card-actions class="pa-4">
+      <v-card-actions class="pa-3 actions-row">
         <v-btn
           variant="text"
           rounded="pill"
           prepend-icon="mdi-camera-retake"
           @click="$emit('scan-again')"
+          class="flex-shrink-1"
         >
           Scan Again
         </v-btn>
@@ -55,9 +56,9 @@
           color="primary"
           variant="flat"
           rounded="pill"
-          size="large"
           prepend-icon="mdi-check-circle"
           @click="$emit('send', result)"
+          class="flex-shrink-1"
         >
           Confirm code
         </v-btn>
@@ -145,5 +146,15 @@ export default {
 
 .result-card {
   overflow: hidden;
+}
+
+.actions-row {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actions-row .v-btn {
+  min-width: 0;
+  white-space: nowrap;
 }
 </style>

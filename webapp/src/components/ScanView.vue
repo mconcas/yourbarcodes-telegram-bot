@@ -46,7 +46,6 @@
         <v-btn
           block
           color="primary"
-          size="large"
           rounded="pill"
           :disabled="!manualCode"
           prepend-icon="mdi-check-circle"
