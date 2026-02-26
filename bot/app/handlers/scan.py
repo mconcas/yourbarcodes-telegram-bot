@@ -37,6 +37,14 @@ def _os(context: ContextTypes.DEFAULT_TYPE) -> OpenSearchClient:
     return context.bot_data["os_client"]
 
 
+def _owner_id(update: Update) -> int:
+    """Return the card owner: user_id in private chats, chat_id in groups."""
+    chat = update.effective_chat
+    if chat and chat.type != "private":
+        return chat.id
+    return update.effective_user.id  # type: ignore[union-attr]
+
+
 # =====================================================================
 #  Photo handler (standalone, outside any conversation)
 # =====================================================================
@@ -117,11 +125,11 @@ async def _webapp_received_name(update: Update, context: ContextTypes.DEFAULT_TY
     card_name = update.message.text.strip()  # type: ignore[union-attr]
     card_code = context.user_data.pop("scan_card_code", "")
     barcode_format = context.user_data.pop("scan_card_format", "code128")
-    user_id = update.effective_user.id  # type: ignore[union-attr]
+    owner = _owner_id(update)
     fmt_label = SUPPORTED_FORMATS.get(barcode_format, barcode_format)
 
     try:
-        _os(context).add_card(user_id, card_name, card_code, barcode_format)
+        _os(context).add_card(owner, card_name, card_code, barcode_format)
         await update.message.reply_text(  # type: ignore[union-attr]
             f"\u2705 Card *{card_name}* saved!\n\n"
             f"Code: `{card_code}`\n"

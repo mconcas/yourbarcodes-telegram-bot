@@ -32,6 +32,14 @@ def _os(context: ContextTypes.DEFAULT_TYPE) -> OpenSearchClient:
     return context.bot_data["os_client"]
 
 
+def _owner_id(update: Update) -> int:
+    """Return the card owner: user_id in private chats, chat_id in groups."""
+    chat = update.effective_chat
+    if chat and chat.type != "private":
+        return chat.id
+    return update.effective_user.id  # type: ignore[union-attr]
+
+
 # ── format selection keyboard ────────────────────────────────────────
 _FORMAT_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton(label, callback_data=f"fmt:{key}")]
@@ -165,13 +173,13 @@ async def confirm_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return FORMAT
 
     # action == "yes"
-    user_id = update.effective_user.id  # type: ignore[union-attr]
+    owner = _owner_id(update)
     card_name = context.user_data["new_card_name"]
     card_code = context.user_data["new_card_code"]
     barcode_format = context.user_data["new_card_format"]
 
     try:
-        _os(context).add_card(user_id, card_name, card_code, barcode_format)
+        _os(context).add_card(owner, card_name, card_code, barcode_format)
         await query.edit_message_text(
             f"\u2705 Card *{card_name}* saved!\n\nUse /mycards to view your barcodes.",
             parse_mode="Markdown",
@@ -201,16 +209,21 @@ def _clear_temp(context: ContextTypes.DEFAULT_TYPE) -> None:
 # =====================================================================
 
 async def mycards(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """List the user's saved cards as inline-keyboard buttons."""
-    user_id = update.effective_user.id  # type: ignore[union-attr]
-    cards = _os(context).get_cards(user_id)
+    """List saved cards (per-user in private, per-group in groups)."""
+    owner = _owner_id(update)
+    cards = _os(context).get_cards(owner)
 
     is_cb = update.callback_query is not None
     if is_cb:
         await update.callback_query.answer()  # type: ignore[union-attr]
 
     if not cards:
-        text = "\U0001f4cb You don\u2019t have any cards yet.\n\nUse /addcard to add one!"
+        is_group = update.effective_chat and update.effective_chat.type != "private"
+        text = (
+            "\U0001f4cb This group doesn\u2019t have any cards yet.\n\nUse /addcard to add one!"
+            if is_group
+            else "\U0001f4cb You don\u2019t have any cards yet.\n\nUse /addcard to add one!"
+        )
         if is_cb:
             await update.callback_query.edit_message_text(text)  # type: ignore[union-attr]
         else:
@@ -252,7 +265,7 @@ async def show_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not card:
         await query.edit_message_text("\u274c Card not found.")
         return
-    if card["user_id"] != update.effective_user.id:  # type: ignore[union-attr]
+    if card["owner_id"] != _owner_id(update):
         await query.edit_message_text("\u274c This card doesn\u2019t belong to you.")
         return
 
@@ -286,8 +299,8 @@ async def show_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def deletecard_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """List cards with delete buttons."""
-    user_id = update.effective_user.id  # type: ignore[union-attr]
-    cards = _os(context).get_cards(user_id)
+    owner = _owner_id(update)
+    cards = _os(context).get_cards(owner)
 
     if not cards:
         await update.message.reply_text("\U0001f4cb Nothing to delete.")  # type: ignore[union-attr]
@@ -316,10 +329,10 @@ async def delete_card_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.answer()
 
     card_id = query.data.split(":")[2]  # type: ignore[union-attr]
-    user_id = update.effective_user.id  # type: ignore[union-attr]
+    owner = _owner_id(update)
     card = _os(context).get_card(card_id)
 
-    if card and _os(context).delete_card(card_id, user_id):
+    if card and _os(context).delete_card(card_id, owner):
         await query.edit_message_text(
             f"\u2705 Card *{card['card_name']}* deleted.", parse_mode="Markdown"
         )

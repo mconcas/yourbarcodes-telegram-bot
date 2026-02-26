@@ -19,7 +19,7 @@ INDEX_BODY = {
     },
     "mappings": {
         "properties": {
-            "user_id": {"type": "long"},
+            "owner_id": {"type": "long"},
             "card_name": {
                 "type": "text",
                 "fields": {"keyword": {"type": "keyword"}},
@@ -66,12 +66,27 @@ class OpenSearchClient:
         raise RuntimeError("Could not connect to OpenSearch")
 
     def init_index(self) -> None:
-        """Create the card index if it does not exist."""
-        if not self.client.indices.exists(INDEX_NAME):
+        """Create the card index if it does not exist.
+
+        If an older index exists with ``user_id`` instead of ``owner_id``,
+        delete and re-create it (data migration for the schema change).
+        """
+        if self.client.indices.exists(INDEX_NAME):
+            mapping = self.client.indices.get_mapping(INDEX_NAME)
+            props = mapping[INDEX_NAME]["mappings"].get("properties", {})
+            if "owner_id" not in props:
+                logger.info(
+                    "Index '%s' has old schema (user_id) — recreating with owner_id",
+                    INDEX_NAME,
+                )
+                self.client.indices.delete(INDEX_NAME)
+                self.client.indices.create(INDEX_NAME, body=INDEX_BODY)
+                logger.info("Recreated index '%s' with owner_id schema", INDEX_NAME)
+            else:
+                logger.info("Index '%s' already exists", INDEX_NAME)
+        else:
             self.client.indices.create(INDEX_NAME, body=INDEX_BODY)
             logger.info("Created index '%s'", INDEX_NAME)
-        else:
-            logger.info("Index '%s' already exists", INDEX_NAME)
 
     # ------------------------------------------------------------------
     # CRUD
@@ -79,14 +94,17 @@ class OpenSearchClient:
 
     def add_card(
         self,
-        user_id: int,
+        owner_id: int,
         card_name: str,
         card_code: str,
         barcode_format: str,
     ) -> str:
-        """Store a card and return its document id."""
+        """Store a card and return its document id.
+
+        *owner_id* is the user id in private chats or the chat id in groups.
+        """
         doc = {
-            "user_id": user_id,
+            "owner_id": owner_id,
             "card_name": card_name,
             "card_code": card_code,
             "barcode_format": barcode_format,
@@ -95,10 +113,10 @@ class OpenSearchClient:
         resp = self.client.index(index=INDEX_NAME, body=doc, refresh="wait_for")
         return resp["_id"]
 
-    def get_cards(self, user_id: int) -> list[dict]:
-        """Return all cards belonging to *user_id*, sorted by creation date."""
+    def get_cards(self, owner_id: int) -> list[dict]:
+        """Return all cards belonging to *owner_id*, sorted by creation date."""
         body = {
-            "query": {"term": {"user_id": user_id}},
+            "query": {"term": {"owner_id": owner_id}},
             "sort": [{"created_at": {"order": "asc"}}],
             "size": 100,
         }
@@ -113,21 +131,21 @@ class OpenSearchClient:
         except NotFoundError:
             return None
 
-    def delete_card(self, card_id: str, user_id: int) -> bool:
-        """Delete a card only if it belongs to *user_id*."""
+    def delete_card(self, card_id: str, owner_id: int) -> bool:
+        """Delete a card only if it belongs to *owner_id*."""
         card = self.get_card(card_id)
-        if card and card["user_id"] == user_id:
+        if card and card["owner_id"] == owner_id:
             self.client.delete(index=INDEX_NAME, id=card_id, refresh="wait_for")
             return True
         return False
 
-    def search_cards(self, user_id: int, query_text: str) -> list[dict]:
-        """Full-text search over card names for a given user."""
+    def search_cards(self, owner_id: int, query_text: str) -> list[dict]:
+        """Full-text search over card names for a given owner."""
         body = {
             "query": {
                 "bool": {
                     "must": [
-                        {"term": {"user_id": user_id}},
+                        {"term": {"owner_id": owner_id}},
                         {"match": {"card_name": query_text}},
                     ]
                 }
