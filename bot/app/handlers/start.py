@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    Update,
+    WebAppInfo,
+)
 from telegram.ext import ContextTypes
 
 from app.config import WEBAPP_URL
@@ -14,15 +21,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("\U0001f4cb My Cards", callback_data="menu:mycards")],
         [InlineKeyboardButton("\u2795 Add Card", callback_data="menu:addcard")],
     ]
-    # If a WebApp scanner URL is configured, offer a live-scan button.
-    if WEBAPP_URL:
-        rows.append([
-            InlineKeyboardButton(
-                "\U0001f4f7 Scan Barcode",
-                web_app=WebAppInfo(url=WEBAPP_URL),
-            )
-        ])
-    else:
+    if not WEBAPP_URL:
         rows.append([
             InlineKeyboardButton(
                 "\U0001f4f7 Scan Barcode (send photo)",
@@ -35,6 +34,20 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+def scanner_reply_keyboard() -> ReplyKeyboardMarkup | None:
+    """Build a persistent reply keyboard with the webapp scanner button.
+
+    ``sendData()`` only works when the Mini App is opened from a
+    ``KeyboardButton``, so we use the reply keyboard for the scanner.
+    """
+    if not WEBAPP_URL:
+        return None
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("\U0001f4f7 Scan Barcode", web_app=WebAppInfo(url=WEBAPP_URL))]],
+        resize_keyboard=True,
+    )
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle ``/start`` and ``/help``."""
     text = (
@@ -42,11 +55,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "I store your loyalty-card barcodes and generate them on the fly.\n\n"
         "Choose an option below:"
     )
+    # Send the inline menu
     await update.message.reply_text(  # type: ignore[union-attr]
         text,
         reply_markup=main_menu_keyboard(),
         parse_mode="Markdown",
     )
+    # Also set the persistent reply keyboard with the scanner button
+    reply_kb = scanner_reply_keyboard()
+    if reply_kb:
+        await update.message.reply_text(  # type: ignore[union-attr]
+            "\u2b07\ufe0f Use the button below to scan barcodes anytime:",
+            reply_markup=reply_kb,
+        )
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
