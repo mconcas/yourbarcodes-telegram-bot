@@ -142,6 +142,7 @@ export default {
       isScanning: false,
       isLoading: false,
       scannedResult: null,
+      retried: false,
     }
   },
 
@@ -169,12 +170,55 @@ export default {
         this.scanner = new Html5Qrcode('barcode-reader', { verbose: false })
 
         const config = {
-          fps: 15,
+          fps: 30,
           qrbox: (w, h) => {
-            const side = Math.min(w, h) * 0.8
-            return { width: Math.floor(side), height: Math.floor(side * 0.5) }
+            const side = Math.min(w, h) * 0.85
+            return { width: Math.floor(side), height: Math.floor(side * 0.45) }
           },
-          aspectRatio: 1.0,
+          disableFlip: false,
+          // Request higher resolution + continuous autofocus via advanced constraints
+          videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            focusMode: { ideal: 'continuous' },
+            zoom: { ideal: 1.5 },
+          },
+        }
+
+        await this.scanner.start(
+          config.videoConstraints,
+          config,
+          this.onScanSuccess,
+          () => { /* scan-in-progress errors — ignore */ }
+        )
+
+        // Apply autofocus via the video track if the browser supports it
+        this.applyAutofocus()
+
+        this.isScanning = true
+      } catch (err) {
+        console.error('Camera error:', err)
+        // Fallback: retry without advanced constraints
+        if (!this.retried) {
+          this.retried = true
+          await this.startScanningFallback()
+        }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async startScanningFallback() {
+      try {
+        this.scanner = new Html5Qrcode('barcode-reader', { verbose: false })
+
+        const config = {
+          fps: 20,
+          qrbox: (w, h) => {
+            const side = Math.min(w, h) * 0.85
+            return { width: Math.floor(side), height: Math.floor(side * 0.45) }
+          },
           disableFlip: false,
         }
 
@@ -182,15 +226,33 @@ export default {
           { facingMode: 'environment' },
           config,
           this.onScanSuccess,
-          () => { /* scan-in-progress errors — ignore */ }
+          () => {}
         )
 
+        this.applyAutofocus()
         this.isScanning = true
       } catch (err) {
-        console.error('Camera error:', err)
-      } finally {
-        this.isLoading = false
+        console.error('Camera fallback also failed:', err)
       }
+    },
+
+    applyAutofocus() {
+      // Try to enable continuous autofocus on the active video track
+      try {
+        const videoEl = document.querySelector('#barcode-reader video')
+        if (!videoEl || !videoEl.srcObject) return
+        const track = videoEl.srcObject.getVideoTracks()[0]
+        if (!track) return
+        const caps = track.getCapabilities?.()
+        if (caps?.focusMode?.includes('continuous')) {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+        }
+        // Also try a slight zoom to help with small barcodes
+        if (caps?.zoom) {
+          const zoom = Math.min(caps.zoom.max, Math.max(caps.zoom.min, 1.5))
+          track.applyConstraints({ advanced: [{ zoom }] })
+        }
+      } catch { /* not supported — ok */ }
     },
 
     async stopScanning() {
