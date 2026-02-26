@@ -109,6 +109,8 @@ async def _webapp_scan_entry(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     context.user_data["scan_card_code"] = code
     context.user_data["scan_card_format"] = barcode_format
+    # Preserve target-chat from deep-link (may be a group chat_id)
+    # Already set in user_data by start_command if deep-linked from a group
 
     await update.message.reply_text(  # type: ignore[union-attr]
         f"\U0001f4f7 *Scanned barcode*\n\n"
@@ -125,18 +127,43 @@ async def _webapp_received_name(update: Update, context: ContextTypes.DEFAULT_TY
     card_name = update.message.text.strip()  # type: ignore[union-attr]
     card_code = context.user_data.pop("scan_card_code", "")
     barcode_format = context.user_data.pop("scan_card_format", "code128")
-    owner = _owner_id(update)
+    group_chat_id = context.user_data.pop("scan_target_chat", None)
+    owner = group_chat_id if group_chat_id else _owner_id(update)
     fmt_label = SUPPORTED_FORMATS.get(barcode_format, barcode_format)
 
     try:
         _os(context).add_card(owner, card_name, card_code, barcode_format)
-        await update.message.reply_text(  # type: ignore[union-attr]
-            f"\u2705 Card *{card_name}* saved!\n\n"
-            f"Code: `{card_code}`\n"
-            f"Format: {fmt_label}\n\n"
-            "Use /mycards to view your barcodes.",
-            parse_mode="Markdown",
-        )
+        if group_chat_id:
+            await update.message.reply_text(  # type: ignore[union-attr]
+                f"\u2705 Card *{card_name}* saved to the group!\n\n"
+                f"Code: `{card_code}`\n"
+                f"Format: {fmt_label}\n\n"
+                "Head back to the group to use /mycards.",
+                parse_mode="Markdown",
+            )
+            # Notify the group
+            user_name = update.effective_user.first_name  # type: ignore[union-attr]
+            try:
+                await context.bot.send_message(
+                    chat_id=group_chat_id,
+                    text=(
+                        f"\U0001f4e5 *{user_name}* added a new card via scanner:\n\n"
+                        f"\U0001f4b3 *{card_name}*\n"
+                        f"Code: `{card_code}` ({fmt_label})\n\n"
+                        "Use /mycards to see all cards."
+                    ),
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                logger.warning("Could not send confirmation to group %s", group_chat_id)
+        else:
+            await update.message.reply_text(  # type: ignore[union-attr]
+                f"\u2705 Card *{card_name}* saved!\n\n"
+                f"Code: `{card_code}`\n"
+                f"Format: {fmt_label}\n\n"
+                "Use /mycards to view your barcodes.",
+                parse_mode="Markdown",
+            )
     except Exception:
         logger.exception("Failed to save card from webapp scan")
         await update.message.reply_text(  # type: ignore[union-attr]
@@ -149,6 +176,7 @@ async def _webapp_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Cancel the webapp-scan card creation."""
     context.user_data.pop("scan_card_code", None)
     context.user_data.pop("scan_card_format", None)
+    context.user_data.pop("scan_target_chat", None)
     await update.message.reply_text("\u274c Cancelled.")  # type: ignore[union-attr]
     return ConversationHandler.END
 

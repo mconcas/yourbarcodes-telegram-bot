@@ -15,7 +15,9 @@ from telegram.ext import ContextTypes
 from app.config import WEBAPP_URL
 
 
-def main_menu_keyboard(*, is_private: bool = True, bot_username: str = "") -> InlineKeyboardMarkup:
+def main_menu_keyboard(
+    *, is_private: bool = True, bot_username: str = "", chat_id: int = 0,
+) -> InlineKeyboardMarkup:
     """Build the main-menu inline keyboard.
 
     In groups, swaps the scanner row for a deep-link to the private chat
@@ -29,7 +31,7 @@ def main_menu_keyboard(*, is_private: bool = True, bot_username: str = "") -> In
         rows.append([
             InlineKeyboardButton(
                 "\U0001f4f7 Scan Barcode",
-                url=f"https://t.me/{bot_username}?start=scan",
+                url=f"https://t.me/{bot_username}?start=scan_{chat_id}",
             )
         ])
     elif not WEBAPP_URL:
@@ -64,8 +66,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     is_private = update.effective_chat.type == "private"  # type: ignore[union-attr]
     bot_username = context.bot.username or ""
 
-    # Deep-link: /start scan  (from group "Scan Barcode" button)
-    if is_private and context.args and context.args[0] == "scan":
+    # Deep-link: /start scan  or  /start scan_<group_chat_id>
+    if is_private and context.args and context.args[0].startswith("scan"):
+        payload = context.args[0]  # "scan" or "scan_-1001234567890"
+        if "_" in payload:
+            try:
+                group_chat_id = int(payload.split("_", 1)[1])
+                context.user_data["scan_target_chat"] = group_chat_id
+            except (ValueError, IndexError):
+                pass  # Ignore malformed deep-link; fall back to private
         reply_kb = scanner_reply_keyboard()
         if reply_kb:
             await update.message.reply_text(  # type: ignore[union-attr]
@@ -83,7 +92,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     # Send the inline menu
     await update.message.reply_text(  # type: ignore[union-attr]
         text,
-        reply_markup=main_menu_keyboard(is_private=is_private, bot_username=bot_username),
+        reply_markup=main_menu_keyboard(
+            is_private=is_private,
+            bot_username=bot_username,
+            chat_id=update.effective_chat.id,  # type: ignore[union-attr]
+        ),
         parse_mode="Markdown",
     )
     # In private chats, also set the persistent reply keyboard with the scanner
@@ -134,5 +147,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         bot_username = context.bot.username or ""
         await query.edit_message_text(
             "Choose an option:",
-            reply_markup=main_menu_keyboard(is_private=is_private, bot_username=bot_username),
+            reply_markup=main_menu_keyboard(
+                is_private=is_private,
+                bot_username=bot_username,
+                chat_id=update.effective_chat.id,  # type: ignore[union-attr]
+            ),
         )
